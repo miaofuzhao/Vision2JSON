@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>场景编辑器 - 比例坐标</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#1a1a2e;font-family:'Microsoft YaHei',sans-serif;
+  min-height:100vh;display:flex;flex-direction:column;
+  align-items:center;padding:10px;color:#eee;
+}
+h1{font-size:15px;margin-bottom:2px}
+.sub{font-size:10px;color:#666;margin-bottom:6px}
+.canvas-wrap{
+  width:92%;max-width:640px;position:relative;
+  background:#0d1b2a;border:1px solid #333;border-radius:8px;overflow:hidden;
+}
+#canvasContainer{
+  position:relative;width:100%;padding-bottom:75%;
+  background:#0d1b2a;overflow:hidden;
+}
+#canvasContainer .layer-el{position:absolute;object-fit:contain;}
+#canvasContainer .bg-layer{width:100%;height:100%;left:0;top:0;pointer-events:none;z-index:1;}
+#canvasContainer .layer-el.interactive{pointer-events:auto;cursor:move;z-index:auto;object-fit:contain;}
+.drop-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#555;font-size:13px;z-index:10;}
+.grid-overlay{position:absolute;inset:0;pointer-events:none;z-index:5;}
+.grid-line{position:absolute;background:rgba(79,195,247,0.12);}
+.grid-line.h{left:0;right:0;height:1px}
+.grid-line.v{top:0;bottom:0;width:1px}
+.sel-border{position:absolute;pointer-events:none;z-index:999;border:2px dashed #81c784;display:none;}
+.sel-tag{position:absolute;top:-22px;left:-2px;font-size:8px;color:#81c784;background:rgba(0,0,0,0.8);padding:2px 5px;border-radius:2px;white-space:nowrap;font-family:'Courier New',monospace;line-height:1.3;}
+.panel{width:92%;max-width:640px;margin-top:6px;display:flex;flex-direction:column;gap:4px;}
+.layer-row{display:flex;align-items:center;gap:4px;background:#0f3460;border-radius:5px;padding:4px 8px;cursor:pointer;border:1.5px solid transparent;font-size:11px;transition:0.15s;}
+.layer-row.active{border-color:#4fc3f7;background:#1a2744}
+.layer-row .par{display:flex;gap:3px;flex-wrap:wrap;align-items:center;flex:1}
+.layer-row .par label{color:#888;font-size:9px}
+.layer-row .par input[type=number]{width:45px;padding:1px 3px;border-radius:2px;border:1px solid #555;background:#12122a;color:#fff;text-align:center;font-size:10px;}
+.layer-row .par input[type=number]:focus{outline:none;border-color:#4fc3f7}
+.layer-row .par select{background:#12122a;color:#fff;border:1px solid #555;border-radius:2px;font-size:10px;padding:1px;}
+.layer-row .par input[type=range]{width:75px;height:4px;-webkit-appearance:none;background:#555;border-radius:2px;}
+.layer-row .par input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#4fc3f7;cursor:pointer}
+.del-btn{background:transparent;color:#ef5350;border:1px solid #ef5350;border-radius:3px;padding:0 5px;font-size:9px;cursor:pointer}
+.del-btn:hover{background:#ef5350;color:#fff}
+.toggle-btn{background:transparent;border:1px solid #555;border-radius:3px;padding:0 5px;font-size:10px;cursor:pointer;color:#aaa;line-height:1.4}
+.toggle-btn.on{color:#81c784;border-color:#81c784}
+.copy-row{background:#0f3460;border-radius:5px;padding:5px 8px;display:flex;gap:5px;align-items:flex-start;}
+.copy-row code{font-family:'Courier New',monospace;font-size:10px;color:#4fc3f7;flex:1;white-space:pre-wrap;word-break:break-all;line-height:1.4;max-height:80px;overflow-y:auto;}
+.btn{background:#4fc3f7;color:#1a1a2e;border:none;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.hint{font-size:10px;color:#555;margin-top:4px;text-align:center}
+</style>
+</head>
+<body>
+<h1>📐 场景编辑器</h1>
+<div class="sub">比例坐标 · 局部DOM刷新 · 滑块永不中断</div>
+
+<div class="canvas-wrap">
+  <div id="canvasContainer">
+    <div class="drop-hint" id="dropHint">拖入背景图 ↓<br><span style="font-size:11px;color:#444">再拖入素材叠在上面</span></div>
+    <div class="grid-overlay" id="gridOverlay" style="display:none"></div>
+    <div class="sel-border" id="selBorder"><div class="sel-tag" id="selTag"></div></div>
+  </div>
+</div>
+
+<div class="panel" id="panel" style="display:none">
+  <div id="layerList"></div>
+  <div class="copy-row" id="copyRow" style="display:none">
+    <code id="outputCode">[]</code>
+    <button class="btn" id="copyBtn">📋 复制 JSON</button>
+  </div>
+</div>
+
+<div class="hint">局部DOM刷新技术 · 滑块拖动时不重建列表 · 彻底解决中断问题</div>
+
+<script>
+const container=document.getElementById('canvasContainer');
+const hint=document.getElementById('dropHint');
+const panel=document.getElementById('panel');
+const layerList=document.getElementById('layerList');
+const copyRow=document.getElementById('copyRow');
+const outputCode=document.getElementById('outputCode');
+const copyBtn=document.getElementById('copyBtn');
+const gridOverlay=document.getElementById('gridOverlay');
+const selBorder=document.getElementById('selBorder');
+const selTag=document.getElementById('selTag');
+
+let layers=[];let hasBg=false;let selIdx=-1;let layerIdCounter=2;
+let bgWidth=0,bgHeight=0;
+
+function buildGrid(){
+  gridOverlay.innerHTML='';gridOverlay.style.display='block';
+  var m=[0,10,20,30,40,50,60,70,80,90,100];
+  for(var i=0;i<m.length;i++){var p=m[i];
+    var vl=document.createElement('div');vl.className='grid-line v';vl.style.left=p+'%';gridOverlay.appendChild(vl);
+    var hl=document.createElement('div');hl.className='grid-line h';hl.style.top=p+'%';gridOverlay.appendChild(hl);
+  }
+}
+
+container.addEventListener('dragover',function(e){e.preventDefault();container.style.borderColor='#4fc3f7'});
+container.addEventListener('dragleave',function(){container.style.borderColor='#333'});
+container.addEventListener('drop',function(e){e.preventDefault();container.style.borderColor='#333';var f=e.dataTransfer.files[0];if(f)addResource(f);});
+
+function addResource(file){
+  var url=URL.createObjectURL(file);var isVideo=file.type.startsWith('video/');
+  if(!hasBg){
+    var el=isVideo?document.createElement('video'):new Image();
+    el.className='layer-el bg-layer';
+    if(isVideo){el.src=url;el.muted=true;el.loop=true;el.autoplay=true;el.playsInline=true;el.play();}else el.src=url;
+    var ck=function(){var w=isVideo?el.videoWidth:el.naturalWidth,h=isVideo?el.videoHeight:el.naturalHeight;if(!w||!h){setTimeout(ck,200);return}
+      bgWidth=w;bgHeight=h;container.style.paddingBottom=(h/w*100)+'%';hasBg=true;
+      hint.style.display='none';panel.style.display='flex';buildGrid();renderAll();
+    };
+    if(isVideo)el.onloadedmetadata=ck;else el.onload=ck;
+    container.insertBefore(el,container.firstChild);
+  }else{
+    var el=isVideo?document.createElement('video'):new Image();
+    el.className='layer-el interactive';
+    if(isVideo){el.src=url;el.muted=true;el.loop=true;el.autoplay=true;el.playsInline=true;el.play();}else el.src=url;
+    var ck2=function(){var w=isVideo?el.videoWidth:el.naturalWidth,h=isVideo?el.videoHeight:el.naturalHeight;if(!w||!h){setTimeout(ck2,200);return}
+      // ★ 改为存储比例坐标 (0~1)，彻底解决设备适配问题
+      layers.push({layer:'图'+layerIdCounter++,visible:true,locked:false,anchor:'center',
+        ratioX:0.5,ratioY:0.5,originalWidth:w,originalHeight:h,scale:100,rotation:0,zIndex:layers.length+2});
+      el.dataset.idx=layers.length-1;selIdx=layers.length-1;container.appendChild(el);
+      copyRow.style.display='flex';renderAll();
+    };
+    if(isVideo)el.onloadedmetadata=ck2;else el.onload=ck2;
+  }
+}
+
+function renderAll(){renderLayers();renderLayerList();updateSelBorder();updateOutput();}
+
+// ★ 核心：局部数据同步——只改数值和样式，绝不重建DOM
+function syncDataChange(idx){
+  var d=layers[idx];
+  var el=container.querySelector('.layer-el.interactive[data-idx="'+idx+'"]');
+  if(el&&d.visible)applyLayerStyle(el,d);
+  var se=document.getElementById('psv_'+idx);if(se)se.textContent=d.scale+'%';
+  var we=document.getElementById('pw_'+idx);if(we)we.textContent=Math.round((d.originalWidth*(d.scale/100))/bgWidth*100)+'%';
+  var he=document.getElementById('ph_'+idx);if(he)he.textContent=Math.round((d.originalHeight*(d.scale/100))/bgHeight*100)+'%';
+  var xi=document.getElementById('px_'+idx);if(xi)xi.value=Math.round(d.ratioX*100);
+  var yi=document.getElementById('py_'+idx);if(yi)yi.value=Math.round(d.ratioY*100);
+  var si=document.getElementById('ps_'+idx);if(si)si.value=d.scale;
+  updateSelBorder();updateOutput();
+}
+
+function renderLayers(){
+  for(var i=0;i<layers.length;i++){var d=layers[i];
+    var el=container.querySelector('.layer-el.interactive[data-idx="'+i+'"]');if(!el)continue;
+    el.style.display=d.visible?'block':'none';el.style.zIndex=d.zIndex||(i+2);
+    el.style.cursor=d.locked?'default':'move';el.style.pointerEvents=d.locked?'none':'auto';
+    if(d.visible)applyLayerStyle(el,d);
+  }
+}
+
+function applyLayerStyle(el,d){
+  var cw=container.offsetWidth||1,ch=container.offsetHeight||1;
+  var sx=cw/bgWidth,sy=ch/bgHeight;
+  var bw=d.originalWidth*sx*(d.scale/100),bh=d.originalHeight*sy*(d.scale/100);
+  el.style.width=bw+'px';el.style.height=bh+'px';
+  // ★ 使用比例坐标计算像素位置
+  var px=d.ratioX*cw,py=d.ratioY*ch,left=px,top=py;
+  if(d.anchor==='center'){left=px-bw/2;top=py-bh/2;}
+  else if(d.anchor==='bottom-center'){left=px-bw/2;top=py-bh;}
+  el.style.left=left+'px';el.style.top=top+'px';el.style.transform='rotate('+(d.rotation||0)+'deg)';
+}
+
+function renderLayerList(){
+  layerList.innerHTML='';
+  for(var i=0;i<layers.length;i++){var d=layers[i];
+    var row=document.createElement('div');row.className='layer-row'+(i===selIdx?' active':'');row.dataset.idx=i;
+    var vb=document.createElement('button');vb.className='toggle-btn'+(d.visible?' on':'');vb.textContent=d.visible?'👁':'−';
+    vb.addEventListener('click',function(e){e.stopPropagation();var idx=parseInt(this.parentNode.dataset.idx);layers[idx].visible=!layers[idx].visible;renderAll();});row.appendChild(vb);
+    var lb=document.createElement('button');lb.className='toggle-btn'+(d.locked?' on':'');lb.textContent=d.locked?'🔒':'🔓';
+    lb.addEventListener('click',function(e){e.stopPropagation();var idx=parseInt(this.parentNode.dataset.idx);layers[idx].locked=!layers[idx].locked;renderAll();});row.appendChild(lb);
+    var nm=document.createElement('span');nm.style.cssText='color:#81c784;min-width:28px;font-size:10px;font-weight:700';nm.textContent=d.layer;row.appendChild(nm);
+    var as=document.createElement('select');
+    ['top-left','center','bottom-center'].forEach(function(a){var o=document.createElement('option');o.value=a;o.textContent={'top-left':'左上','center':'中心','bottom-center':'底部'}[a];if(a===d.anchor)o.selected=true;as.appendChild(o);});
+    as.addEventListener('change',function(){var idx=parseInt(this.parentNode.dataset.idx);layers[idx].anchor=this.value;syncDataChange(idx);});row.appendChild(as);
+    var par=document.createElement('span');par.className='par';
+    var pw=Math.round((d.originalWidth*(d.scale/100))/bgWidth*100);
+    var ph=Math.round((d.originalHeight*(d.scale/100))/bgHeight*100);
+    // ★ 界面上直接显示和输入百分比 (0-100)
+    par.innerHTML='X%<input type=number id="px_'+i+'" value="'+Math.round(d.ratioX*100)+'">Y%<input type=number id="py_'+i+'" value="'+Math.round(d.ratioY*100)+'">'+
+      '<label>W</label><span style="color:#aaa;font-size:9px" id="pw_'+i+'">'+pw+'%</span><label>H</label><span style="color:#aaa;font-size:9px" id="ph_'+i+'">'+ph+'%</span>'+
+      '<label>缩</label><input type=range id="ps_'+i+'" min="10" max="300" value="'+d.scale+'"><span style="color:#aaa;font-size:9px;min-width:25px" id="psv_'+i+'">'+d.scale+'%</span>';
+    row.appendChild(par);
+    row.addEventListener('click',function(e){
+      if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='BUTTON')return;
+      selIdx=parseInt(this.dataset.idx);
+      document.querySelectorAll('.layer-row').forEach(function(r,idx){r.className='layer-row'+(idx===selIdx?' active':'');});
+      updateSelBorder();
+    });
+    
+    // ★★★ 核心修复：使用 par.querySelector 代替 document.getElementById ★★★
+    ['px_'+i,'py_'+i,'ps_'+i].forEach(function(id){
+      var inp=par.querySelector('#'+id); // 修复Bug：在插入文档前查询自身子节点
+      if(!inp)return;
+      inp.addEventListener('input',function(){
+        var idx=parseInt(this.id.split('_')[1]);var d2=layers[idx];if(!d2)return;
+        var p=this.id.split('_')[0];
+        if(p==='ps')d2.scale=parseFloat(this.value)||100;
+        else if(p==='px')d2.ratioX=(parseFloat(this.value)||0)/100; // 百分比转比例
+        else if(p==='py')d2.ratioY=(parseFloat(this.value)||0)/100; // 百分比转比例
+        syncDataChange(idx);
+      });
+    });
+    
+    var del=document.createElement('button');del.className='del-btn';del.textContent='✕';
+    del.addEventListener('click',function(e){e.stopPropagation();var idx=parseInt(this.parentNode.dataset.idx);removeLayer(idx);});row.appendChild(del);
+    layerList.appendChild(row);
+  }
+}
+
+function updateSelBorder(){
+  if(selIdx<0||selIdx>=layers.length||!layers[selIdx].visible){selBorder.style.display='none';return}
+  var d=layers[selIdx];var cw=container.offsetWidth||1,ch=container.offsetHeight||1;
+  var sx=cw/bgWidth,sy=ch/bgHeight;
+  var bw=d.originalWidth*sx*(d.scale/100),bh=d.originalHeight*sy*(d.scale/100);
+  var px=d.ratioX*cw,py=d.ratioY*ch,left=px,top=py;
+  if(d.anchor==='center'){left=px-bw/2;top=py-bh/2;}
+  else if(d.anchor==='bottom-center'){left=px-bw/2;top=py-bh;}
+  selBorder.style.display='block';selBorder.style.left=left+'px';selBorder.style.top=top+'px';
+  selBorder.style.width=bw+'px';selBorder.style.height=bh+'px';selBorder.style.zIndex=(d.zIndex||selIdx+2)+100;
+  var fw=Math.round(d.originalWidth*(d.scale/100)),fh=Math.round(d.originalHeight*(d.scale/100));
+  selTag.textContent=d.layer+' | X:'+Math.round(d.ratioX*100)+'% Y:'+Math.round(d.ratioY*100)+'% | 尺寸:'+fw+'×'+fh+'px';
+}
+
+function removeLayer(idx){
+  var el=container.querySelector('.layer-el.interactive[data-idx="'+idx+'"]');if(el)el.remove();
+  layers.splice(idx,1);container.querySelectorAll('.layer-el.interactive').forEach(function(e,i){e.dataset.idx=i;});
+  if(selIdx>=layers.length)selIdx=layers.length-1;if(layers.length===0)copyRow.style.display='none';renderAll();
+}
+
+var dragData=null;
+container.addEventListener('mousedown',function(e){
+  if(!hasBg)return;var el=e.target.closest('.layer-el.interactive');if(!el||!el.dataset)return;
+  var idx=parseInt(el.dataset.idx);if(isNaN(idx)||!layers[idx]||layers[idx].locked)return;
+  selIdx=idx;document.querySelectorAll('.layer-row').forEach(function(r,i){r.className='layer-row'+(i===selIdx?' active':'');});
+  var d=layers[idx];
+  // 记录初始鼠标位置和初始比例
+  dragData={idx:idx,ox:e.clientX,oy:e.clientY,drx:d.ratioX,dry:d.ratioY};e.preventDefault();
+});
+document.addEventListener('mousemove',function(e){
+  if(!dragData)return;var dd=dragData;var d2=layers[dd.idx];if(!d2)return;
+  var cw=container.offsetWidth||1,ch=container.offsetHeight||1;
+  // ★ 拖拽时将鼠标移动的像素值转换为比例偏移量
+  d2.ratioX=dd.drx+(e.clientX-dd.ox)/cw;
+  d2.ratioY=dd.dry+(e.clientY-dd.oy)/ch;
+  syncDataChange(dd.idx);
+});
+document.addEventListener('mouseup',function(){dragData=null});
+
+function updateOutput(){
+  var out=layers.map(function(d){var fw=Math.round(d.originalWidth*(d.scale/100)),fh=Math.round(d.originalHeight*(d.scale/100));
+    return{layer:d.layer,visible:d.visible,anchor:d.anchor,
+      // 导出纯比例坐标和大小，前端拿到这些数据可以完美适配任何手机/平板分辨率
+      ratioPosition:{x:parseFloat(d.ratioX.toFixed(4)),y:parseFloat(d.ratioY.toFixed(4))},
+      ratioSize:{width:parseFloat((fw/bgWidth).toFixed(4)),height:parseFloat((fh/bgHeight).toFixed(4))},
+      relPositionPct:{x:parseFloat((d.ratioX*100).toFixed(2)),y:parseFloat((d.ratioY*100).toFixed(2))},
+      relSizePct:{width:parseFloat((fw/bgWidth*100).toFixed(2)),height:parseFloat((fh/bgHeight*100).toFixed(2))},
+      rotation:d.rotation||0,zIndex:d.zIndex||2}});
+  outputCode.textContent=JSON.stringify(out,null,2)||'[]';
+}
+
+copyBtn.addEventListener('click',function(){var t=outputCode.textContent;
+  if(!t||t==='[]')return;
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(function(){copyBtn.textContent='✅ 已复制';setTimeout(function(){copyBtn.textContent='📋 复制 JSON';},1500);}).catch(function(){document.execCommand('copy');});
+});
+window.addEventListener('resize',renderAll);
+</script>
+</body>
+</html>
