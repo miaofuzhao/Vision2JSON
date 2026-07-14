@@ -1,32 +1,43 @@
 # Vision2JSON
 
 ## A visual layout translator for AI-assisted development
+
+A visual-to-structure protocol for AI-assisted development.
+
 > 一个连接人类视觉表达与 AI 编程的轻量级布局转换工具。
+
 **Turn visual ideas into structured data that AI coding agents can understand.**
 
-Vision2JSON is a lightweight visual positioning tool designed for people who use AI coding assistants to create games, apps, and interactive interfaces.
+Vision2JSON is a lightweight visual positioning and layout translation tool designed for people who use AI coding assistants to create games, apps, and interactive interfaces.
 
 Instead of repeatedly telling AI:
 
-> "Put this image a little more to the right and make it smaller."
+> "Move this image a little to the right and make it smaller."
 
-You can simply drag, resize, and position the asset visually — then export precise JSON parameters for your AI coding workflow.
+You can visually arrange your assets, adjust their position and size, then export precise JSON parameters that AI coding agents can understand.
 
 ---
 
-## Why Vision2JSON?
+# Latest Update
+
+- Added image and video asset support
+- Improved resolution-independent positioning
+- Enhanced AI-friendly JSON export
+- Supports multiple visual layers with independent parameters
+
+---
+
+# Why Vision2JSON?
 
 AI coding assistants are becoming powerful enough to build applications and games, but there is still a communication gap:
 
 **Humans think visually. AI needs structured parameters.**
 
-For example:
+Humans naturally understand:
 
-Human:
+> "Put this character near the bottom center."
 
-> "Place this character in the center-bottom of the scene."
-
-AI needs something like:
+But AI coding agents need structured information:
 
 ```json
 {
@@ -43,7 +54,7 @@ AI needs something like:
 }
 ```
 
-Vision2JSON acts as the bridge between human visual intention and AI-generated code.
+Vision2JSON acts as a bridge between human visual intention and AI-generated code.
 
 ---
 
@@ -53,23 +64,21 @@ Vision2JSON acts as the bridge between human visual intention and AI-generated c
 
 * Drag images and videos onto the canvas
 * Move layers visually
-* Resize assets with resolution-independent scaling
+* Resize assets with relative scaling
 * Manage multiple layers
+* Export structured layout information
+
+---
 
 ## Resolution-independent coordinates
 
-Instead of fixed pixels, Vision2JSON uses relative coordinates:
+Traditional pixel coordinates break across different devices.
+
+Vision2JSON uses relative coordinates:
 
 ```
 0.0 ~ 1.0
 ```
-
-This allows layouts to work across:
-
-* Mobile phones
-* Tablets
-* Desktop screens
-* Different game resolutions
 
 Example:
 
@@ -80,11 +89,40 @@ Example:
 }
 ```
 
-always means the center of the canvas.
+always represents the center position of the canvas.
+
+This allows layouts to adapt across:
+
+* Mobile phones
+* Tablets
+* Desktop screens
+* Different game resolutions
 
 ---
 
-## AI-friendly JSON export
+# Media positioning, not media understanding
+
+Vision2JSON does not require AI agents to understand the internal content of images or videos.
+
+The AI does not need to know:
+
+* what object appears in the video;
+* what the image represents;
+* what animation happens inside the file.
+
+It only needs structured layout information:
+
+* Position
+* Size
+* Anchor point
+* Layer order
+* Rotation angle
+
+The purpose of Vision2JSON is to describe **where and how an asset should exist inside an application**.
+
+---
+
+# AI-friendly JSON export
 
 Export structured layout information:
 
@@ -108,7 +146,7 @@ Export structured layout information:
 ]
 ```
 
-The output can be directly provided to:
+The exported data can be provided directly to:
 
 * AI coding agents
 * Game development assistants
@@ -120,19 +158,18 @@ The output can be directly provided to:
 
 ## AI game development
 
-Example:
+When creating games with AI assistants:
 
-You are creating a farming game with AI.
+Instead of manually describing:
 
-Instead of manually adjusting:
-
-* trees
-* animals
+* character positions
 * buildings
+* trees
 * buttons
 * dialog windows
+* visual effects
 
-You can visually arrange them and give AI the exact layout data.
+You can arrange assets visually and provide exact layout data to AI.
 
 ---
 
@@ -144,21 +181,24 @@ Useful for:
 * Web applications
 * Mobile interfaces
 * Interactive prototypes
+* AI-assisted UI generation
 
 ---
 
 # How to use
 
 1. Open `index.html` in your browser.
-2. Drag your background image into the canvas.
+2. Drag your background image or video into the canvas.
 3. Add additional assets.
-4. Adjust position and size.
+4. Adjust position, size, and layer order.
 5. Copy the generated JSON.
 6. Send the layout information to your AI coding assistant.
 
 No installation required.
 
 No dependencies.
+
+Runs completely locally in your browser.
 
 ---
 
@@ -184,6 +224,8 @@ AI-generated implementation
 
 # Technology
 
+Built with:
+
 * Pure HTML
 * CSS
 * JavaScript
@@ -204,17 +246,23 @@ Possible future improvements:
 * Rotation controls
 * Layer ordering management
 * More anchor point options
+* Timeline and interaction recording
 * Export formats for different engines
 
-  * Unity
-  * Godot
-  * Web frameworks
+Potential integrations:
+
+* Unity
+* Godot
+* Web frameworks
 
 ---
 
 # Author
 
 Miao Fuzhao
+
+Email:
+miao.fuzhao.research@gmail.com
 
 Independent AI-assisted creator exploring human-AI collaboration.
 
@@ -226,7 +274,7 @@ This project was created while building AI-assisted games and applications.
 
 During development, I found that describing visual layouts to AI coding agents often required many rounds of manual adjustment.
 
-Vision2JSON was created to reduce this communication gap.
+Vision2JSON was created to reduce the communication gap between human creativity and AI implementation.
 
 ---
 
