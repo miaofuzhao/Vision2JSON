@@ -23,8 +23,9 @@ You can visually arrange your assets, adjust their position and size, then expor
 ## 2026-07-14
 
 - Added image and video asset positioning support, allowing different media types to share the same layout protocol.
+- Added rotation support for visual assets, enabling more complete spatial transformations in AI-generated layouts.
 - Improved resolution-independent positioning using ratio-based coordinates.
-- Enhanced AI-friendly JSON export for more accurate communication with AI coding agents.
+- Enhanced AI-friendly JSON export with additional layout parameters for more accurate communication with AI coding agents.
 - Added support for managing multiple visual layers with independent layout parameters.
 
 ## 2026-07-12
