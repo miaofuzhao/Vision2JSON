@@ -118,9 +118,9 @@ function addResource(file){
     el.className='layer-el interactive';
     if(isVideo){el.src=url;el.muted=true;el.loop=true;el.autoplay=true;el.playsInline=true;el.play();}else el.src=url;
     var ck2=function(){var w=isVideo?el.videoWidth:el.naturalWidth,h=isVideo?el.videoHeight:el.naturalHeight;if(!w||!h){setTimeout(ck2,200);return}
-      // ★ 改为存储比例坐标 (0~1)，彻底解决设备适配问题
+      // ★ 补充 flipH 和 flipV 字段
       layers.push({layer:'图'+layerIdCounter++,visible:true,locked:false,anchor:'center',
-        ratioX:0.5,ratioY:0.5,originalWidth:w,originalHeight:h,scale:100,rotation:0,zIndex:layers.length+2});
+        ratioX:0.5,ratioY:0.5,originalWidth:w,originalHeight:h,scale:100,rotation:0,flipH:false,flipV:false,zIndex:layers.length+2});
       el.dataset.idx=layers.length-1;selIdx=layers.length-1;container.appendChild(el);
       copyRow.style.display='flex';renderAll();
     };
@@ -130,7 +130,7 @@ function addResource(file){
 
 function renderAll(){renderLayers();renderLayerList();updateSelBorder();updateOutput();}
 
-// ★ 核心：局部数据同步——只改数值和样式，绝不重建DOM
+// ★ 核心：局部数据同步——加上旋转同步
 function syncDataChange(idx){
   var d=layers[idx];
   var el=container.querySelector('.layer-el.interactive[data-idx="'+idx+'"]');
@@ -141,6 +141,9 @@ function syncDataChange(idx){
   var xi=document.getElementById('px_'+idx);if(xi)xi.value=Math.round(d.ratioX*100);
   var yi=document.getElementById('py_'+idx);if(yi)yi.value=Math.round(d.ratioY*100);
   var si=document.getElementById('ps_'+idx);if(si)si.value=d.scale;
+  // 旋转角度局部同步
+  var rt=document.getElementById('rt_'+idx);if(rt)rt.value=d.rotation;
+  var rtv=document.getElementById('rtv_'+idx);if(rtv)rtv.textContent=d.rotation+'°';
   updateSelBorder();updateOutput();
 }
 
@@ -158,11 +161,13 @@ function applyLayerStyle(el,d){
   var sx=cw/bgWidth,sy=ch/bgHeight;
   var bw=d.originalWidth*sx*(d.scale/100),bh=d.originalHeight*sy*(d.scale/100);
   el.style.width=bw+'px';el.style.height=bh+'px';
-  // ★ 使用比例坐标计算像素位置
   var px=d.ratioX*cw,py=d.ratioY*ch,left=px,top=py;
   if(d.anchor==='center'){left=px-bw/2;top=py-bh/2;}
   else if(d.anchor==='bottom-center'){left=px-bw/2;top=py-bh;}
-  el.style.left=left+'px';el.style.top=top+'px';el.style.transform='rotate('+(d.rotation||0)+'deg)';
+  el.style.left=left+'px';el.style.top=top+'px';
+  // ★ 叠加翻转效果，完美适配旋转
+  var scX=d.flipH?-1:1,scY=d.flipV?-1:1;
+  el.style.transform='rotate('+(d.rotation||0)+'deg) scaleX('+scX+') scaleY('+scY+')';
 }
 
 function renderLayerList(){
@@ -180,10 +185,13 @@ function renderLayerList(){
     var par=document.createElement('span');par.className='par';
     var pw=Math.round((d.originalWidth*(d.scale/100))/bgWidth*100);
     var ph=Math.round((d.originalHeight*(d.scale/100))/bgHeight*100);
-    // ★ 界面上直接显示和输入百分比 (0-100)
+    // ★ 新增旋转滑块和翻转按钮
     par.innerHTML='X%<input type=number id="px_'+i+'" value="'+Math.round(d.ratioX*100)+'">Y%<input type=number id="py_'+i+'" value="'+Math.round(d.ratioY*100)+'">'+
       '<label>W</label><span style="color:#aaa;font-size:9px" id="pw_'+i+'">'+pw+'%</span><label>H</label><span style="color:#aaa;font-size:9px" id="ph_'+i+'">'+ph+'%</span>'+
-      '<label>缩</label><input type=range id="ps_'+i+'" min="10" max="300" value="'+d.scale+'"><span style="color:#aaa;font-size:9px;min-width:25px" id="psv_'+i+'">'+d.scale+'%</span>';
+      '<label>缩</label><input type=range id="ps_'+i+'" min="10" max="300" value="'+d.scale+'"><span style="color:#aaa;font-size:9px;min-width:25px" id="psv_'+i+'">'+d.scale+'%</span>'+
+      '<label>转</label><input type=range id="rt_'+i+'" min="0" max="360" value="'+d.rotation+'"><span style="color:#aaa;font-size:9px;min-width:25px" id="rtv_'+i+'">'+d.rotation+'°</span>'+
+      '<button type="button" class="toggle-btn '+(d.flipH?'on':'')+'" id="fh_'+i+'">左右翻转</button>'+
+      '<button type="button" class="toggle-btn '+(d.flipV?'on':'')+'" id="fv_'+i+'">上下翻转</button>';
     row.appendChild(par);
     row.addEventListener('click',function(e){
       if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='BUTTON')return;
@@ -192,18 +200,38 @@ function renderLayerList(){
       updateSelBorder();
     });
     
-    // ★★★ 核心修复：使用 par.querySelector 代替 document.getElementById ★★★
-    ['px_'+i,'py_'+i,'ps_'+i].forEach(function(id){
-      var inp=par.querySelector('#'+id); // 修复Bug：在插入文档前查询自身子节点
+    // ★ 绑定 input 事件，加入 rt_ 旋转
+    ['px_'+i,'py_'+i,'ps_'+i,'rt_'+i].forEach(function(id){
+      var inp=par.querySelector('#'+id); 
       if(!inp)return;
       inp.addEventListener('input',function(){
         var idx=parseInt(this.id.split('_')[1]);var d2=layers[idx];if(!d2)return;
         var p=this.id.split('_')[0];
         if(p==='ps')d2.scale=parseFloat(this.value)||100;
-        else if(p==='px')d2.ratioX=(parseFloat(this.value)||0)/100; // 百分比转比例
-        else if(p==='py')d2.ratioY=(parseFloat(this.value)||0)/100; // 百分比转比例
+        else if(p==='px')d2.ratioX=(parseFloat(this.value)||0)/100; 
+        else if(p==='py')d2.ratioY=(parseFloat(this.value)||0)/100; 
+        else if(p==='rt')d2.rotation=parseFloat(this.value)||0; // 新增旋转处理
         syncDataChange(idx);
       });
+    });
+
+    // ★ 绑定翻转按钮 click 事件
+    var fhBtn = par.querySelector('#fh_'+i);
+    if(fhBtn) fhBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var idx = parseInt(this.id.split('_')[1]);
+      layers[idx].flipH = !layers[idx].flipH;
+      this.className = 'toggle-btn '+(layers[idx].flipH ? 'on' : '');
+      syncDataChange(idx);
+    });
+
+    var fvBtn = par.querySelector('#fv_'+i);
+    if(fvBtn) fvBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var idx = parseInt(this.id.split('_')[1]);
+      layers[idx].flipV = !layers[idx].flipV;
+      this.className = 'toggle-btn '+(layers[idx].flipV ? 'on' : '');
+      syncDataChange(idx);
     });
     
     var del=document.createElement('button');del.className='del-btn';del.textContent='✕';
@@ -238,13 +266,11 @@ container.addEventListener('mousedown',function(e){
   var idx=parseInt(el.dataset.idx);if(isNaN(idx)||!layers[idx]||layers[idx].locked)return;
   selIdx=idx;document.querySelectorAll('.layer-row').forEach(function(r,i){r.className='layer-row'+(i===selIdx?' active':'');});
   var d=layers[idx];
-  // 记录初始鼠标位置和初始比例
   dragData={idx:idx,ox:e.clientX,oy:e.clientY,drx:d.ratioX,dry:d.ratioY};e.preventDefault();
 });
 document.addEventListener('mousemove',function(e){
   if(!dragData)return;var dd=dragData;var d2=layers[dd.idx];if(!d2)return;
   var cw=container.offsetWidth||1,ch=container.offsetHeight||1;
-  // ★ 拖拽时将鼠标移动的像素值转换为比例偏移量
   d2.ratioX=dd.drx+(e.clientX-dd.ox)/cw;
   d2.ratioY=dd.dry+(e.clientY-dd.oy)/ch;
   syncDataChange(dd.idx);
@@ -254,12 +280,14 @@ document.addEventListener('mouseup',function(){dragData=null});
 function updateOutput(){
   var out=layers.map(function(d){var fw=Math.round(d.originalWidth*(d.scale/100)),fh=Math.round(d.originalHeight*(d.scale/100));
     return{layer:d.layer,visible:d.visible,anchor:d.anchor,
-      // 导出纯比例坐标和大小，前端拿到这些数据可以完美适配任何手机/平板分辨率
       ratioPosition:{x:parseFloat(d.ratioX.toFixed(4)),y:parseFloat(d.ratioY.toFixed(4))},
       ratioSize:{width:parseFloat((fw/bgWidth).toFixed(4)),height:parseFloat((fh/bgHeight).toFixed(4))},
       relPositionPct:{x:parseFloat((d.ratioX*100).toFixed(2)),y:parseFloat((d.ratioY*100).toFixed(2))},
       relSizePct:{width:parseFloat((fw/bgWidth*100).toFixed(2)),height:parseFloat((fh/bgHeight*100).toFixed(2))},
-      rotation:d.rotation||0,zIndex:d.zIndex||2}});
+      rotation:d.rotation||0,
+      flipH:d.flipH||false,  // ★ 导出翻转状态
+      flipV:d.flipV||false,  // ★ 导出翻转状态
+      zIndex:d.zIndex||2}});
   outputCode.textContent=JSON.stringify(out,null,2)||'[]';
 }
 
