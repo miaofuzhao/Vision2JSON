@@ -18,12 +18,21 @@ You can visually arrange your assets, adjust their position and size, then expor
 
 ---
 
-# Latest Update
+# Changelog
 
-- Added image and video asset support
-- Improved resolution-independent positioning
-- Enhanced AI-friendly JSON export
-- Supports multiple visual layers with independent parameters
+## 2026-07-14
+
+- Added image and video asset positioning support, allowing different media types to share the same layout protocol.
+- Improved resolution-independent positioning using ratio-based coordinates.
+- Enhanced AI-friendly JSON export for more accurate communication with AI coding agents.
+- Added support for managing multiple visual layers with independent layout parameters.
+
+## 2026-07-12
+
+- Initial release with visual asset positioning workflow.
+- Introduced ratio-based coordinates for resolution-independent layouts.
+- Added AI-friendly JSON export to translate visual layouts into structured instructions for AI coding agents.
+- Added support for managing multiple visual layers with independent position and size parameters.
 
 ---
 
